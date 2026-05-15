@@ -30,17 +30,23 @@ pub enum ServirError {
 impl ServirError {
     #[inline]
     pub fn not_found(resource: impl Into<String>) -> Self {
-        Self::NotFound { resource: resource.into() }
+        Self::NotFound {
+            resource: resource.into(),
+        }
     }
 
     #[inline]
     pub fn bad_request(reason: impl Into<String>) -> Self {
-        Self::BadRequest { reason: reason.into() }
+        Self::BadRequest {
+            reason: reason.into(),
+        }
     }
 
     #[inline]
     pub fn internal(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::Internal { source: Box::new(source) }
+        Self::Internal {
+            source: Box::new(source),
+        }
     }
 
     /// Decomposes the error into its HTTP status, machine-readable code, and
@@ -49,13 +55,19 @@ impl ServirError {
     #[inline]
     pub(crate) fn into_error_parts(self) -> (StatusCode, &'static str, Cow<'static, str>) {
         match self {
-            Self::NotFound { resource } =>
-                (StatusCode::NOT_FOUND, "NOT_FOUND", Cow::Owned(resource)),
-            Self::BadRequest { reason } =>
-                (StatusCode::BAD_REQUEST, "BAD_REQUEST", Cow::Owned(reason)),
+            Self::NotFound { resource } => {
+                (StatusCode::NOT_FOUND, "NOT_FOUND", Cow::Owned(resource))
+            }
+            Self::BadRequest { reason } => {
+                (StatusCode::BAD_REQUEST, "BAD_REQUEST", Cow::Owned(reason))
+            }
             Self::Internal { source } => {
                 tracing::error!(error = %source, "INTERNAL_ERROR");
-                (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", Cow::Borrowed("an unexpected error occurred"))
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "INTERNAL_ERROR",
+                    Cow::Borrowed("an unexpected error occurred"),
+                )
             }
         }
     }
@@ -66,7 +78,14 @@ impl IntoResponse for ServirError {
     #[inline]
     fn into_response(self) -> Response {
         let (http_status, code, message) = self.into_error_parts();
-        ApiResponse::<()>::Error { error: ErrorBody { code, message, http_status } }.into_response()
+        ApiResponse::<()>::Error {
+            error: ErrorBody {
+                code,
+                message,
+                http_status,
+            },
+        }
+        .into_response()
     }
 }
 
@@ -76,17 +95,26 @@ mod tests {
 
     #[test]
     fn not_found_display() {
-        assert_eq!(ServirError::not_found("widget").to_string(), "NOT_FOUND: widget");
+        assert_eq!(
+            ServirError::not_found("widget").to_string(),
+            "NOT_FOUND: widget"
+        );
     }
 
     #[test]
     fn bad_request_display() {
-        assert_eq!(ServirError::bad_request("missing field").to_string(), "BAD_REQUEST: missing field");
+        assert_eq!(
+            ServirError::bad_request("missing field").to_string(),
+            "BAD_REQUEST: missing field"
+        );
     }
 
     #[test]
     fn internal_display_does_not_expose_source() {
-        assert_eq!(ServirError::internal(std::io::Error::other("secret")).to_string(), "INTERNAL_ERROR");
+        assert_eq!(
+            ServirError::internal(std::io::Error::other("secret")).to_string(),
+            "INTERNAL_ERROR"
+        );
     }
 
     #[test]
@@ -101,7 +129,8 @@ mod tests {
         assert_eq!(code, "BAD_REQUEST");
         assert_eq!(&*msg, "bad thing");
 
-        let (status, code, msg) = ServirError::internal(std::io::Error::other("secret")).into_error_parts();
+        let (status, code, msg) =
+            ServirError::internal(std::io::Error::other("secret")).into_error_parts();
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(code, "INTERNAL_ERROR");
         // message must not contain the source

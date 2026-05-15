@@ -44,10 +44,12 @@ async fn trigger_bad_request() -> Result<ApiResponse<()>, ServirError> {
 // ---------------------------------------------------------------------------
 
 fn build_app() -> Router {
-    let state = TestState { label: "test".to_string() };
+    let state = TestState {
+        label: "test".to_string(),
+    };
     let router = Router::new()
-        .route("/health",      get(health))
-        .route("/not-found",   get(trigger_not_found))
+        .route("/health", get(health))
+        .route("/not-found", get(trigger_not_found))
         .route("/bad-request", get(trigger_bad_request))
         .with_state(state);
     standard_middleware(router)
@@ -59,7 +61,9 @@ async fn body_json(router: Router, uri: &str) -> (StatusCode, Value) {
         .await
         .unwrap();
     let status = response.status();
-    let bytes = axum::body::to_bytes(response.into_body(), 4096).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 4096)
+        .await
+        .unwrap();
     let json: Value = serde_json::from_slice(&bytes).unwrap();
     (status, json)
 }
@@ -98,7 +102,12 @@ async fn error_response_shape_bad_request() {
 async fn unknown_route_returns_404() {
     // Axum's built-in fallback returns an empty body, not an ApiResponse.
     let response = build_app()
-        .oneshot(Request::builder().uri("/does-not-exist").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/does-not-exist")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
@@ -111,7 +120,12 @@ async fn unknown_route_returns_404() {
 #[tokio::test]
 async fn middleware_generates_request_id_on_response() {
     let response = build_app()
-        .oneshot(Request::builder().uri("/health").body(Body::empty()).unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
     assert!(response.headers().contains_key("x-request-id"));
@@ -130,6 +144,9 @@ async fn middleware_propagates_caller_supplied_request_id() {
         )
         .await
         .unwrap();
-    let returned_id = response.headers().get("x-request-id").and_then(|v| v.to_str().ok());
+    let returned_id = response
+        .headers()
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok());
     assert_eq!(returned_id, Some(supplied_id));
 }

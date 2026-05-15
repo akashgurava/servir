@@ -46,7 +46,13 @@ impl<T: Serialize> ApiResponse<T> {
     #[inline]
     pub fn error(err: ServirError) -> Self {
         let (http_status, code, message) = err.into_error_parts();
-        Self::Error { error: ErrorBody { code, message, http_status } }
+        Self::Error {
+            error: ErrorBody {
+                code,
+                message,
+                http_status,
+            },
+        }
     }
 }
 
@@ -73,8 +79,8 @@ impl<T: Serialize> From<Result<T, ServirError>> for ApiResponse<T> {
     #[inline]
     fn from(result: Result<T, ServirError>) -> Self {
         match result {
-            Ok(data)  => Self::ok(data),
-            Err(err)  => Self::error(err),
+            Ok(data) => Self::ok(data),
+            Err(err) => Self::error(err),
         }
     }
 }
@@ -95,8 +101,8 @@ impl<T: Serialize> IntoResponse for ApiResponse<T> {
     #[inline]
     fn into_response(self) -> Response {
         let http_status = match &self {
-            Self::Ok { .. }        => StatusCode::OK,
-            Self::Error { error }  => error.http_status,
+            Self::Ok { .. } => StatusCode::OK,
+            Self::Error { error } => error.http_status,
         };
         (http_status, Json(self)).into_response()
     }
@@ -115,7 +121,9 @@ mod tests {
     #[test]
     fn error_from_servir_error() {
         let r: ApiResponse<()> = ApiResponse::error(ServirError::not_found("x"));
-        let ApiResponse::Error { error } = r else { panic!("expected Error variant") };
+        let ApiResponse::Error { error } = r else {
+            panic!("expected Error variant")
+        };
         assert_eq!(error.code, "NOT_FOUND");
         assert_eq!(&*error.message, "x");
         assert_eq!(error.http_status, StatusCode::NOT_FOUND);

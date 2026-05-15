@@ -14,7 +14,11 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use axum::{Json, Router, extract::State, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use serde::{Deserialize, Serialize};
 use servir::{ApiResponse, ServirError, init_tracing, start_server_from_env};
 use tracing::{info, instrument};
@@ -83,5 +87,7 @@ async fn main() {
         .route("/count", get(request_count))
         .with_state(state);
 
-    start_server_from_env(3000, router).await.expect("server failed");
+    start_server_from_env(3000, router)
+        .await
+        .expect("server failed");
 }

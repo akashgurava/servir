@@ -1,10 +1,14 @@
+use std::net::SocketAddr;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-use std::net::SocketAddr;
 
-use axum::{Json, Router, extract::State, routing::{get, post}};
+use axum::{
+    Json, Router,
+    extract::State,
+    routing::{get, post},
+};
 use serde::{Deserialize, Serialize};
 use servir::{ApiResponse, ServirError, init_tracing, start_server};
 use tracing::{info, instrument};
