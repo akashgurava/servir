@@ -1,0 +1,19 @@
+# Compiled artifacts — largest exclusion, always first
+target/
+
+# Version control
+.git/
+
+# Editor and IDE state
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local environment overrides
+.env
+.env.*
+
+# CI and tooling configs that don't affect the build
+.github/
+*.md
