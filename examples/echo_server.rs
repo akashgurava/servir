@@ -9,18 +9,19 @@
 //! Override log filter:
 //!   RUST_LOG=debug cargo run --example echo_server --features telemetry
 
+use std::net::SocketAddr;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 
 use axum::{
-    Json, Router,
+    Router,
     extract::State,
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
-use servir::{ApiResponse, ServirError, init_tracing, start_server_from_env};
+use servir::{ApiResponse, AppJson, AuthUserError, Servir, ServirError, init_tracing};
 use tracing::{info, instrument};
 
 // State — downstream consumer owns this; servir has no knowledge of it.
@@ -51,10 +52,10 @@ async fn ping() -> ApiResponse<&'static str> {
 #[instrument(skip_all, fields(instance = %state.instance_name))]
 async fn echo(
     State(state): State<AppState>,
-    Json(payload): Json<EchoPayload>,
+    AppJson(payload): AppJson<EchoPayload>,
 ) -> Result<ApiResponse<EchoResponse>, ServirError> {
     if payload.message.is_empty() {
-        return Err(ServirError::bad_request("message must not be empty"));
+        return Err(AuthUserError::empty_username());
     }
     let total_requests = state.request_count.fetch_add(1, Ordering::Relaxed) + 1;
     info!(total_requests, "echo handled");
@@ -87,7 +88,14 @@ async fn main() {
         .route("/count", get(request_count))
         .with_state(state);
 
-    start_server_from_env(3000, router)
+    Servir::builder()
+        .service_name("echo_server")
+        .addr(SocketAddr::from(([0, 0, 0, 0], 3000)))
+        .routes(router)
+        .build()
+        .await
+        .expect("server failed")
+        .serve()
         .await
         .expect("server failed");
 }

@@ -11,7 +11,6 @@
 #   docker build -t echo-server .
 #
 # Run:
-#   docker run -e ECHO_SERVER_PORT=8080 -p 8080:8080 echo-server
 #   docker run -p 3000:3000 echo-server
 
 # ── Stage 1: planner ──────────────────────────────────────────────────────────
@@ -44,7 +43,6 @@ FROM gcr.io/distroless/cc-debian12 AS runtime
 
 COPY --from=builder /app/target/release/echo-server /usr/local/bin/server
 
-ENV ECHO_SERVER_PORT=3000
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/local/bin/server"]

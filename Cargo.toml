@@ -1,5 +1,6 @@
 [workspace]
 members = [".", "consumer"]
+default-members = ["consumer"]
 resolver = "2"
 
 [package]
@@ -8,8 +9,16 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["telemetry"]
+default = ["telemetry", "auth"]
 telemetry = ["dep:tracing-subscriber"]
+auth = [
+    "dep:sqlx",
+    "dep:argon2",
+    "dep:jsonwebtoken",
+    "dep:uuid",
+    "dep:rand_core",
+    "dep:hex",
+]
 
 [dependencies]
 axum = "0.8"
@@ -18,15 +27,31 @@ tracing = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.6", features = ["trace", "request-id", "uuid"] }
-tokio = { version = "1", features = ["net"] }
+tokio = { version = "1", features = ["net", "rt"] }
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
     "fmt",
 ], optional = true }
+sqlx = { version = "0.8", features = [
+    "sqlite",
+    "runtime-tokio",
+    "macros",
+    "migrate",
+], optional = true }
+argon2 = { version = "0.5", optional = true }
+jsonwebtoken = { version = "9", optional = true }
+uuid = { version = "1", features = ["v4"], optional = true }
+rand_core = { version = "0.6", features = ["getrandom"], optional = true }
+hex = { version = "0.4", optional = true }
+
+tower = { version = "0.5" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 tower = { version = "0.5", features = ["util"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+serde_json = "1"
+jsonwebtoken = "9"
 
 [[example]]
 name = "echo_server"

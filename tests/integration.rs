@@ -3,6 +3,8 @@
 //! Uses `tower::ServiceExt::oneshot` to drive a real axum `Router` without
 //! binding a TCP socket. All middleware is exercised end-to-end.
 
+use std::net::SocketAddr;
+
 use axum::{
     Router,
     body::Body,
@@ -11,7 +13,7 @@ use axum::{
     routing::get,
 };
 use serde_json::Value;
-use servir::{ApiResponse, ServirError, standard_middleware};
+use servir::{ApiResponse, DbError, ServirError, Servir};
 use tower::ServiceExt;
 
 // ---------------------------------------------------------------------------
@@ -27,36 +29,41 @@ struct TestState {
 // Handlers
 // ---------------------------------------------------------------------------
 
-async fn health(State(state): State<TestState>) -> ApiResponse<String> {
+async fn echo(State(state): State<TestState>) -> ApiResponse<String> {
     ApiResponse::ok(state.label.clone())
 }
 
-async fn trigger_not_found() -> Result<ApiResponse<()>, ServirError> {
-    Err(ServirError::not_found("item"))
-}
-
-async fn trigger_bad_request() -> Result<ApiResponse<()>, ServirError> {
-    Err(ServirError::bad_request("invalid input"))
+async fn trigger_db_error() -> Result<ApiResponse<()>, ServirError> {
+    Err(DbError::consume_refresh_token("forced"))
 }
 
 // ---------------------------------------------------------------------------
 // App factory
 // ---------------------------------------------------------------------------
 
-fn build_app() -> Router {
+async fn build_app() -> Servir {
     let state = TestState {
         label: "test".to_string(),
     };
-    let router = Router::new()
-        .route("/health", get(health))
-        .route("/not-found", get(trigger_not_found))
-        .route("/bad-request", get(trigger_bad_request))
-        .with_state(state);
-    standard_middleware(router)
+    Servir::builder()
+        .service_name("test")
+        .addr(SocketAddr::from(([127, 0, 0, 1], 0)))
+        .auth_database_url("sqlite::memory:")
+        .routes(
+            Router::new()
+                .route("/echo", get(echo))
+                .route("/db-error", get(trigger_db_error))
+                .with_state(state),
+        )
+        .build()
+        .await
+        .unwrap()
 }
 
-async fn body_json(router: Router, uri: &str) -> (StatusCode, Value) {
-    let response = router
+async fn body_json(servir: &Servir, uri: &str) -> (StatusCode, Value) {
+    let response = servir
+        .router()
+        .clone()
         .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -74,43 +81,37 @@ async fn body_json(router: Router, uri: &str) -> (StatusCode, Value) {
 
 #[tokio::test]
 async fn success_response_shape() {
-    let (status, json) = body_json(build_app(), "/health").await;
+    let app = build_app().await;
+    let (status, json) = body_json(&app, "/api/v1/echo").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(json["status"], "ok");
     assert_eq!(json["data"], "test");
 }
 
 #[tokio::test]
-async fn error_response_shape_not_found() {
-    let (status, json) = body_json(build_app(), "/not-found").await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
-    assert_eq!(json["status"], "error");
-    assert_eq!(json["error"]["code"], "NOT_FOUND");
-    assert_eq!(json["error"]["message"], "item");
+async fn health_endpoint() {
+    let app = build_app().await;
+    let (status, json) = body_json(&app, "/api/v1/health").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json, serde_json::json!({"status": "ok", "data": {"status": "healthy"}}));
 }
 
 #[tokio::test]
-async fn error_response_shape_bad_request() {
-    let (status, json) = body_json(build_app(), "/bad-request").await;
-    assert_eq!(status, StatusCode::BAD_REQUEST);
+async fn error_response_shape_internal_error() {
+    let app = build_app().await;
+    let (status, json) = body_json(&app, "/api/v1/db-error").await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(json["status"], "error");
-    assert_eq!(json["error"]["code"], "BAD_REQUEST");
-    assert_eq!(json["error"]["message"], "invalid input");
+    assert_eq!(json["error"]["error_id"], "DB_CONSUME_REFRESH_TOKEN_FAILED");
+    assert_eq!(json["error"]["context"]["error"], "forced");
 }
 
 #[tokio::test]
 async fn unknown_route_returns_404() {
-    // Axum's built-in fallback returns an empty body, not an ApiResponse.
-    let response = build_app()
-        .oneshot(
-            Request::builder()
-                .uri("/does-not-exist")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    let app = build_app().await;
+    let (status, json) = body_json(&app, "/does-not-exist").await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(json["error"]["error_id"], "NOT_FOUND");
 }
 
 // ---------------------------------------------------------------------------
@@ -119,10 +120,13 @@ async fn unknown_route_returns_404() {
 
 #[tokio::test]
 async fn middleware_generates_request_id_on_response() {
-    let response = build_app()
+    let app = build_app().await;
+    let response = app
+        .router()
+        .clone()
         .oneshot(
             Request::builder()
-                .uri("/health")
+                .uri("/api/v1/health")
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -133,11 +137,14 @@ async fn middleware_generates_request_id_on_response() {
 
 #[tokio::test]
 async fn middleware_propagates_caller_supplied_request_id() {
+    let app = build_app().await;
     let supplied_id = "caller-supplied-id-abc123";
-    let response = build_app()
+    let response = app
+        .router()
+        .clone()
         .oneshot(
             Request::builder()
-                .uri("/health")
+                .uri("/api/v1/health")
                 .header("x-request-id", supplied_id)
                 .body(Body::empty())
                 .unwrap(),

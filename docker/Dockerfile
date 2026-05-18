@@ -7,11 +7,9 @@
 #   docker build --build-arg BINARY_NAME=my-server -t my-image .
 #
 # Run:
-#   docker run -e PORT=8080 my-image
-#   docker run -p 3000:3000 my-image          # uses default PORT=3000
+#   docker run -p 3000:3000 my-image
 #
-# The server binary must call servir::start_server_from_env(default_port, router)
-# so it reads PORT from the environment.
+# The bind address is configured in code via Servir::builder().addr(...).
 
 # ── Stage 1: planner ──────────────────────────────────────────────────────────
 # cargo-chef computes the minimal dependency set so the next stage can cache
@@ -46,9 +44,6 @@ FROM gcr.io/distroless/cc-debian12 AS runtime
 ARG BINARY_NAME
 COPY --from=builder /app/target/release/${BINARY_NAME} /usr/local/bin/server
 
-# start_server_from_env reads PORT at startup. Override at runtime:
-#   docker run -e PORT=8080 my-image
-ENV PORT=3000
 EXPOSE 3000
 
 ENTRYPOINT ["/usr/local/bin/server"]

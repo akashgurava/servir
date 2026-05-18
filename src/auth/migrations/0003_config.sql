@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS auth_config (
+    key   TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
