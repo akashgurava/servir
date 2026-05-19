@@ -739,4 +739,62 @@ mod tests {
         };
         assert_eq!(err.to_string(), "TOKEN_INVALID (bad signature)");
     }
+
+    #[test]
+    fn db_error_constructors() {
+        let e = DbError::connection("sqlite://x.db", "refused");
+        assert_eq!(e.error_id(), "DB_CONNECTION_FAILED");
+        assert_eq!(e.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let e = DbError::migration("checksum mismatch");
+        assert_eq!(e.error_id(), "DB_MIGRATION_FAILED");
+
+        let e = DbError::user_create("alice", "unique violation");
+        assert_eq!(e.error_id(), "DB_USER_CREATE_FAILED");
+
+        let e = DbError::user_find_by_username("bob", "timeout");
+        assert_eq!(e.error_id(), "DB_USER_FIND_BY_USERNAME_FAILED");
+
+        let e = DbError::user_find_by_id("user-1", "timeout");
+        assert_eq!(e.error_id(), "DB_USER_FIND_BY_ID_FAILED");
+
+        let e = DbError::store_refresh_token("alice", "disk full");
+        assert_eq!(e.error_id(), "DB_STORE_REFRESH_TOKEN_FAILED");
+
+        let e = DbError::delete_refresh_tokens_for_user("alice", "locked");
+        assert_eq!(e.error_id(), "DB_DELETE_REFRESH_TOKENS_FOR_USER_FAILED");
+
+        let e = DbError::consume_refresh_token("row not found");
+        assert_eq!(e.error_id(), "DB_CONSUME_REFRESH_TOKEN_FAILED");
+
+        let e = DbError::unknown("some_op", "unexpected");
+        assert_eq!(e.error_id(), "DB_UNKNOWN");
+    }
+
+    #[test]
+    fn servir_error_variants() {
+        let e = ServirError::bad_request("invalid json");
+        assert_eq!(e.error_id(), "BAD_REQUEST");
+        assert_eq!(e.status_code(), StatusCode::BAD_REQUEST);
+
+        let e = ServirError::NotFound;
+        assert_eq!(e.error_id(), "NOT_FOUND");
+        assert_eq!(e.status_code(), StatusCode::NOT_FOUND);
+
+        let e = ServirError::from(std::io::Error::other("boom"));
+        assert_eq!(e.error_id(), "IO_ERROR");
+        assert_eq!(e.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn from_impls() {
+        let _: ServirError = DbError::Connection {
+            url: "x".to_string(),
+            error: "e".to_string(),
+        }
+        .into();
+
+        let _: ServirError = AuthUserError::EmptyUsername.into();
+        let _: ServirError = AuthTokenError::Expired.into();
+    }
 }

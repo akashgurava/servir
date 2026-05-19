@@ -592,6 +592,17 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn protected_with_refresh_token_returns_401() {
+        let app = build_test_app().await;
+        let (_, refresh) = register(&app).await;
+
+        let (status, json) = call(&app, get_authed("/protected", &refresh)).await;
+
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(json["error"]["error_id"], "WRONG_TOKEN_KIND");
+    }
+
+    #[tokio::test]
     async fn me_returns_user_info() {
         let app = build_test_app().await;
         let (access, _) = register(&app).await;

@@ -88,3 +88,68 @@ pub async fn find_or_create_profile(
         created_at: now,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn test_pool() -> SqlitePool {
+        let pool = connect("sqlite::memory:").await.unwrap();
+        migrate(&pool).await.unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn connect_and_migrate() {
+        let pool = test_pool().await;
+        // Verify the migration created the table.
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM user_profiles")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn create_profile_on_first_access() {
+        let pool = test_pool().await;
+        let profile = find_or_create_profile(&pool, "user-1", "alice")
+            .await
+            .unwrap();
+
+        assert_eq!(profile.id, "user-1");
+        assert_eq!(profile.username, "alice");
+        assert!(profile.created_at > 0);
+    }
+
+    #[tokio::test]
+    async fn find_existing_profile() {
+        let pool = test_pool().await;
+
+        // First call creates.
+        let created = find_or_create_profile(&pool, "user-2", "bob")
+            .await
+            .unwrap();
+
+        // Second call finds.
+        let found = find_or_create_profile(&pool, "user-2", "bob")
+            .await
+            .unwrap();
+
+        assert_eq!(created.id, found.id);
+        assert_eq!(created.username, found.username);
+        assert_eq!(created.created_at, found.created_at);
+    }
+
+    #[tokio::test]
+    async fn different_users_get_separate_profiles() {
+        let pool = test_pool().await;
+
+        let alice = find_or_create_profile(&pool, "u1", "alice").await.unwrap();
+        let bob = find_or_create_profile(&pool, "u2", "bob").await.unwrap();
+
+        assert_ne!(alice.id, bob.id);
+        assert_eq!(alice.username, "alice");
+        assert_eq!(bob.username, "bob");
+    }
+}

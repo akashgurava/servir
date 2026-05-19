@@ -555,4 +555,32 @@ mod tests {
         let result = create_user(&pool, "bob", "hash2").await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn load_or_generate_secret_persists() {
+        let pool = test_pool().await;
+        let mut config = AuthConfig::new("");
+
+        // First call generates and stores.
+        config.load_or_generate_secret(&pool).await.unwrap();
+        let first_secret = config.secret.clone();
+        assert!(!first_secret.is_empty());
+
+        // Second call loads existing.
+        let mut config2 = AuthConfig::new("");
+        config2.load_or_generate_secret(&pool).await.unwrap();
+        assert_eq!(config2.secret, first_secret);
+    }
+
+    #[tokio::test]
+    async fn find_user_by_id_works() {
+        let pool = test_pool().await;
+        let user = create_user(&pool, "carol", "hash").await.unwrap();
+
+        let found = find_user_by_id(&pool, &user.id).await.unwrap();
+        assert_eq!(found.unwrap().username, "carol");
+
+        let missing = find_user_by_id(&pool, "nonexistent").await.unwrap();
+        assert!(missing.is_none());
+    }
 }
