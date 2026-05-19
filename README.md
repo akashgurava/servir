@@ -1,5 +1,8 @@
 # servir
 
+[![CI](https://github.com/akashgurava/servir/actions/workflows/ci.yml/badge.svg)](https://github.com/akashgurava/servir/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/akashgurava/servir/branch/main/graph/badge.svg)](https://codecov.io/gh/akashgurava/servir)
+
 Rust utility library providing common HTTP server infrastructure for self-hosted consumer servers. Handles routing boilerplate, middleware, structured error responses, observability, and user authentication so consumers can focus on business logic.
 
 ## What it provides
