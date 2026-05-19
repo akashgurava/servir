@@ -36,6 +36,7 @@ async fn main() {
     Servir::builder()
         .service_name("my-app")
         .addr(SocketAddr::from(([0, 0, 0, 0], 3000)))
+        .auth_database_url("sqlite://./data/db/auth.db")
         .routes(routes)
         .serve()
         .await
@@ -66,7 +67,9 @@ The JWT signing secret is auto-generated on first run and persisted in the auth 
 | `.service_name(name)` | no | Service name for tracing spans and log filtering (default: `"servir"`) |
 | `.addr(socket_addr)` | yes | Socket address to bind on (e.g. `SocketAddr::from(([0, 0, 0, 0], 3000))`) |
 | `.routes(router)` | yes | Application routes (must have state applied via `.with_state()`) |
-| `.auth_database_url(url)` | no | Auth database URL (default: `AUTH_DATABASE_URL` env var, then `sqlite://auth.db`) |
+| `.auth_database_url(url)` | yes | Auth database URL (e.g. `sqlite://./data/db/auth.db`) |
+| `.access_token_ttl_secs(secs)` | no | Access token lifetime in seconds (default: 900 / 15 min) |
+| `.refresh_token_ttl_secs(secs)` | no | Refresh token lifetime in seconds (default: 604800 / 7 days) |
 
 ## Building a consumer
 

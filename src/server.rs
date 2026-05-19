@@ -116,7 +116,8 @@ async fn serve(addr: SocketAddr, router: Router) -> Result<(), std::io::Error> {
 ///
 /// Servir::builder()
 ///     .service_name("my-app")
-///     .port(3000)
+///     .addr(SocketAddr::from(([0, 0, 0, 0], 3000)))
+///     .auth_database_url("sqlite://./data/db/auth.db")
 ///     .routes(routes)
 ///     .serve()
 ///     .await
@@ -139,6 +140,10 @@ impl Servir {
             routes: None,
             #[cfg(feature = "auth")]
             auth_database_url: None,
+            #[cfg(feature = "auth")]
+            access_token_ttl_secs: None,
+            #[cfg(feature = "auth")]
+            refresh_token_ttl_secs: None,
         }
     }
 }
@@ -168,6 +173,10 @@ pub struct ServerBuilder {
     routes: Option<Router>,
     #[cfg(feature = "auth")]
     auth_database_url: Option<String>,
+    #[cfg(feature = "auth")]
+    access_token_ttl_secs: Option<u64>,
+    #[cfg(feature = "auth")]
+    refresh_token_ttl_secs: Option<u64>,
 }
 
 impl ServerBuilder {
@@ -189,10 +198,24 @@ impl ServerBuilder {
         self
     }
 
-    /// Overrides the auth database URL. Defaults to `AUTH_DATABASE_URL` env var or `sqlite://auth.db`.
+    /// Sets the auth database URL. Required when the `auth` feature is enabled.
     #[cfg(feature = "auth")]
     pub fn auth_database_url(mut self, url: impl Into<String>) -> Self {
         self.auth_database_url = Some(url.into());
+        self
+    }
+
+    /// Sets the access token TTL in seconds. Defaults to 900 (15 minutes).
+    #[cfg(feature = "auth")]
+    pub fn access_token_ttl_secs(mut self, secs: u64) -> Self {
+        self.access_token_ttl_secs = Some(secs);
+        self
+    }
+
+    /// Sets the refresh token TTL in seconds. Defaults to 604800 (7 days).
+    #[cfg(feature = "auth")]
+    pub fn refresh_token_ttl_secs(mut self, secs: u64) -> Self {
+        self.refresh_token_ttl_secs = Some(secs);
         self
     }
 
@@ -217,8 +240,7 @@ impl ServerBuilder {
 
             let database_url = self
                 .auth_database_url
-                .or_else(|| std::env::var("AUTH_DATABASE_URL").ok())
-                .unwrap_or_else(|| "sqlite://auth.db".to_string());
+                .expect("auth_database_url must be set before calling build()");
 
             let opts = SqliteConnectOptions::from_str(&database_url)
                 .map_err(|e| crate::error::DbError::connection(&database_url, e))?
@@ -227,7 +249,13 @@ impl ServerBuilder {
                 .await
                 .map_err(|e| crate::error::DbError::connection(&database_url, e))?;
 
-            let mut auth_config = crate::auth::AuthConfig::from_env();
+            let mut auth_config = crate::auth::AuthConfig::with_defaults();
+            if let Some(ttl) = self.access_token_ttl_secs {
+                auth_config.set_access_token_ttl(ttl);
+            }
+            if let Some(ttl) = self.refresh_token_ttl_secs {
+                auth_config.set_refresh_token_ttl(ttl);
+            }
             auth_config.migrate(&auth_pool).await?;
             auth_config.load_or_generate_secret(&auth_pool).await?;
             api = api.merge(crate::auth::mount_auth_routes(

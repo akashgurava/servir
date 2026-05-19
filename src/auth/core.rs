@@ -121,28 +121,24 @@ impl AuthConfig {
         }
     }
 
-    /// Reads configuration from environment variables.
+    /// Constructs a config with sensible defaults.
     ///
-    /// Optional: `AUTH_ACCESS_TOKEN_TTL_SECS` (default: 900),
-    ///           `AUTH_REFRESH_TOKEN_TTL_SECS` (default: 604800).
-    ///
+    /// Defaults: access TTL 900s (15 min), refresh TTL 604800s (7 days).
     /// The signing secret is loaded from the database after [`Self::migrate`].
-    pub(crate) fn from_env() -> Self {
-        let access_token_ttl_secs = std::env::var("AUTH_ACCESS_TOKEN_TTL_SECS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(900);
-
-        let refresh_token_ttl_secs = std::env::var("AUTH_REFRESH_TOKEN_TTL_SECS")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(604_800);
-
+    pub(crate) fn with_defaults() -> Self {
         Self {
-            secret: String::new(), // loaded after migrate via load_or_generate_secret
-            access_token_ttl_secs,
-            refresh_token_ttl_secs,
+            secret: String::new(),
+            access_token_ttl_secs: 900,
+            refresh_token_ttl_secs: 604_800,
         }
+    }
+
+    pub(crate) fn set_access_token_ttl(&mut self, secs: u64) {
+        self.access_token_ttl_secs = secs;
+    }
+
+    pub(crate) fn set_refresh_token_ttl(&mut self, secs: u64) {
+        self.refresh_token_ttl_secs = secs;
     }
 
     /// Runs embedded migrations and logs the current schema version.

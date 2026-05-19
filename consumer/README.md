@@ -15,12 +15,17 @@ Starter template for a `servir`-based server. Copy this directory to bootstrap a
 
 ## Configuration
 
+Database paths are resolved in this order: **CLI arg > ENV var > default**.
+
+| CLI arg | Env variable | Default | Description |
+|---|---|---|---|
+| `--auth-db` | `CONSUMER_AUTH_DB` | `./data/db/auth.db` | Auth DB (servir-managed, auto-created). |
+| `--data-db` | `CONSUMER_DATA_DB` | `./data/db/data.db` | App DB (consumer-managed). |
+
+Other environment variables:
+
 | Variable | Default | Description |
 |---|---|---|
-| `AUTH_DATABASE_URL` | `sqlite://auth.db` | Auth DB (servir-managed, auto-created). |
-| `APP_DATABASE_URL` | `sqlite://app.db` | App DB (consumer-managed). |
-| `AUTH_ACCESS_TOKEN_TTL_SECS` | `900` | Access token lifetime (15 min). |
-| `AUTH_REFRESH_TOKEN_TTL_SECS` | `604800` | Refresh token lifetime (7 days). |
 | `RUST_LOG` | `info` | Tracing filter (e.g. `debug`, `echo_server=trace`). |
 
 The JWT signing secret is auto-generated and stored in the auth database on first run — no manual configuration needed.

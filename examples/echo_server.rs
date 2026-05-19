@@ -91,6 +91,7 @@ async fn main() {
     Servir::builder()
         .service_name("echo_server")
         .addr(SocketAddr::from(([0, 0, 0, 0], 3000)))
+        .auth_database_url("sqlite://./data/db/auth.db")
         .routes(router)
         .build()
         .await
