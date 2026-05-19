@@ -13,7 +13,7 @@ use axum::{
     routing::get,
 };
 use serde_json::Value;
-use servir::{ApiResponse, DbError, ServirError, Servir};
+use servir::{ApiResponse, DbError, Servir, ServirError};
 use tower::ServiceExt;
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,10 @@ async fn health_endpoint() {
     let app = build_app().await;
     let (status, json) = body_json(&app, "/api/v1/health").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(json, serde_json::json!({"status": "ok", "data": {"status": "healthy"}}));
+    assert_eq!(
+        json,
+        serde_json::json!({"status": "ok", "data": {"status": "healthy"}})
+    );
 }
 
 #[tokio::test]

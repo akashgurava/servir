@@ -25,8 +25,7 @@ async fn user(
     AuthUser(claims): AuthUser,
     State(state): State<AppState>,
 ) -> Result<ApiResponse<UserResponse>, ServirError> {
-    let profile =
-        db::find_or_create_profile(&state.pool, claims.sub(), claims.username()).await?;
+    let profile = db::find_or_create_profile(&state.pool, claims.sub(), claims.username()).await?;
     Ok(ApiResponse::ok(UserResponse {
         id: profile.id,
         username: profile.username,
@@ -41,9 +40,7 @@ async fn main() {
     db::migrate(&app_pool).await.expect("app db migrate");
 
     let state = AppState { pool: app_pool };
-    let routes = Router::new()
-        .route("/user", get(user))
-        .with_state(state);
+    let routes = Router::new().route("/user", get(user)).with_state(state);
 
     Servir::builder()
         .service_name("echo-server")

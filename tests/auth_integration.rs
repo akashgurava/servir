@@ -235,7 +235,10 @@ async fn refresh_valid_token_returns_new_tokens() {
 
     let (status, json) = call(
         &app,
-        post("/api/v1/auth/refresh", json!({"refresh_token": refresh_token})),
+        post(
+            "/api/v1/auth/refresh",
+            json!({"refresh_token": refresh_token}),
+        ),
     )
     .await;
 
@@ -255,7 +258,10 @@ async fn refresh_used_token_returns_401() {
     // First use — valid.
     let (status, _) = call(
         &app,
-        post("/api/v1/auth/refresh", json!({"refresh_token": refresh_token})),
+        post(
+            "/api/v1/auth/refresh",
+            json!({"refresh_token": refresh_token}),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -263,7 +269,10 @@ async fn refresh_used_token_returns_401() {
     // Second use of the same token — must fail.
     let (status, json) = call(
         &app,
-        post("/api/v1/auth/refresh", json!({"refresh_token": refresh_token})),
+        post(
+            "/api/v1/auth/refresh",
+            json!({"refresh_token": refresh_token}),
+        ),
     )
     .await;
 
@@ -279,7 +288,10 @@ async fn logout_then_refresh_returns_401() {
     // Logout using the refresh token.
     let (status, json) = call(
         &app,
-        post("/api/v1/auth/logout", json!({"refresh_token": refresh_token})),
+        post(
+            "/api/v1/auth/logout",
+            json!({"refresh_token": refresh_token}),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "logout failed: {json}");
@@ -287,7 +299,10 @@ async fn logout_then_refresh_returns_401() {
     // Subsequent refresh must fail.
     let (status, json) = call(
         &app,
-        post("/api/v1/auth/refresh", json!({"refresh_token": refresh_token})),
+        post(
+            "/api/v1/auth/refresh",
+            json!({"refresh_token": refresh_token}),
+        ),
     )
     .await;
     assert_eq!(
@@ -304,7 +319,10 @@ async fn refresh_with_invalid_token_returns_401() {
 
     let (status, json) = call(
         &app,
-        post("/api/v1/auth/refresh", json!({"refresh_token": "not.a.valid.jwt"})),
+        post(
+            "/api/v1/auth/refresh",
+            json!({"refresh_token": "not.a.valid.jwt"}),
+        ),
     )
     .await;
 

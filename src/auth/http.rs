@@ -315,10 +315,10 @@ async fn me(AuthUser(claims): AuthUser) -> ApiResponse<MeResponse> {
 
 #[cfg(test)]
 mod tests {
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use axum::routing::get;
-    use axum::Router;
     use serde_json::{Value, json};
     use sqlx::sqlite::SqliteConnectOptions;
     use sqlx::{Sqlite, pool::PoolOptions};
@@ -383,7 +383,10 @@ mod tests {
     async fn register(app: &Router) -> (String, String) {
         let (_, json) = call(
             app,
-            post("/auth/register", json!({"username": "alice", "password": "hunter22"})),
+            post(
+                "/auth/register",
+                json!({"username": "alice", "password": "hunter22"}),
+            ),
         )
         .await;
         let access = json["data"]["access_token"].as_str().unwrap().to_string();
@@ -396,7 +399,10 @@ mod tests {
         let app = build_test_app().await;
         let (status, json) = call(
             &app,
-            post("/auth/register", json!({"username": "bob", "password": "password1"})),
+            post(
+                "/auth/register",
+                json!({"username": "bob", "password": "password1"}),
+            ),
         )
         .await;
 
@@ -412,7 +418,10 @@ mod tests {
         let app = build_test_app().await;
         let (status, json) = call(
             &app,
-            post("/auth/register", json!({"username": "", "password": "12345678"})),
+            post(
+                "/auth/register",
+                json!({"username": "", "password": "12345678"}),
+            ),
         )
         .await;
 
@@ -425,7 +434,10 @@ mod tests {
         let app = build_test_app().await;
         let (status, json) = call(
             &app,
-            post("/auth/register", json!({"username": "bob", "password": "short"})),
+            post(
+                "/auth/register",
+                json!({"username": "bob", "password": "short"}),
+            ),
         )
         .await;
 
@@ -440,7 +452,10 @@ mod tests {
 
         let (status, json) = call(
             &app,
-            post("/auth/register", json!({"username": "alice", "password": "hunter22"})),
+            post(
+                "/auth/register",
+                json!({"username": "alice", "password": "hunter22"}),
+            ),
         )
         .await;
 
@@ -456,7 +471,10 @@ mod tests {
 
         let (status, json) = call(
             &app,
-            post("/auth/login", json!({"username": "alice", "password": "hunter22"})),
+            post(
+                "/auth/login",
+                json!({"username": "alice", "password": "hunter22"}),
+            ),
         )
         .await;
 
@@ -472,7 +490,10 @@ mod tests {
 
         let (status, json) = call(
             &app,
-            post("/auth/login", json!({"username": "alice", "password": "wrongpass"})),
+            post(
+                "/auth/login",
+                json!({"username": "alice", "password": "wrongpass"}),
+            ),
         )
         .await;
 
@@ -487,7 +508,10 @@ mod tests {
 
         let (status, json) = call(
             &app,
-            post("/auth/login", json!({"username": "nobody", "password": "hunter22"})),
+            post(
+                "/auth/login",
+                json!({"username": "nobody", "password": "hunter22"}),
+            ),
         )
         .await;
 
@@ -511,7 +535,10 @@ mod tests {
     async fn protected_without_token_returns_401() {
         let app = build_test_app().await;
 
-        let req = Request::builder().uri("/protected").body(Body::empty()).unwrap();
+        let req = Request::builder()
+            .uri("/protected")
+            .body(Body::empty())
+            .unwrap();
         let (status, json) = call(&app, req).await;
 
         assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -598,7 +625,11 @@ mod tests {
         let (_, refresh) = register(&app).await;
 
         // First use — valid.
-        call(&app, post("/auth/refresh", json!({"refresh_token": refresh}))).await;
+        call(
+            &app,
+            post("/auth/refresh", json!({"refresh_token": refresh})),
+        )
+        .await;
 
         // Second use — consumed.
         let (status, json) = call(
@@ -646,11 +677,8 @@ mod tests {
         .unwrap();
 
         let app = build_test_app().await;
-        let (status, json) = call(
-            &app,
-            post("/auth/refresh", json!({"refresh_token": token})),
-        )
-        .await;
+        let (status, json) =
+            call(&app, post("/auth/refresh", json!({"refresh_token": token}))).await;
 
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(json["error"]["error_id"], "WRONG_TOKEN_KIND");

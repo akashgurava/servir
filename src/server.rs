@@ -212,8 +212,8 @@ impl ServerBuilder {
 
         #[cfg(feature = "auth")]
         {
-            use std::str::FromStr;
             use sqlx::sqlite::SqliteConnectOptions;
+            use std::str::FromStr;
 
             let database_url = self
                 .auth_database_url
@@ -246,9 +246,7 @@ impl ServerBuilder {
         let router = Router::new().nest("/api/v1", api).fallback(not_found);
         let router = standard_middleware(router);
 
-        let addr = self
-            .addr
-            .expect("addr must be set before calling build()");
+        let addr = self.addr.expect("addr must be set before calling build()");
 
         Ok(Servir::new(router, addr))
     }

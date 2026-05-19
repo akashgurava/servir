@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -e
+
+# Check Rust formatting
+if command -v cargo &> /dev/null; then
+    echo "Checking cargo fmt..."
+    cargo fmt --all -- --check
+fi

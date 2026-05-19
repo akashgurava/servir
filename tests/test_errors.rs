@@ -319,10 +319,7 @@ async fn test_all_routes_and_errors() {
     // =========================================================================
     let (status, json) = call(
         &app,
-        post_json(
-            "/api/v1/auth/logout",
-            json!({"refresh_token": new_refresh}),
-        ),
+        post_json("/api/v1/auth/logout", json!({"refresh_token": new_refresh})),
     )
     .await;
     assert_eq!(status, StatusCode::OK);

@@ -170,12 +170,11 @@ impl AuthConfig {
     /// Must be called after [`Self::migrate`]. Generates a 256-bit random key on first run
     /// and persists it in the `auth_config` table.
     pub async fn load_or_generate_secret(&mut self, pool: &SqlitePool) -> Result<(), ServirError> {
-        let existing: Option<String> = sqlx::query_scalar(
-            "SELECT value FROM auth_config WHERE key = 'signing_secret'",
-        )
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| DbError::unknown("load_signing_secret", e))?;
+        let existing: Option<String> =
+            sqlx::query_scalar("SELECT value FROM auth_config WHERE key = 'signing_secret'")
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| DbError::unknown("load_signing_secret", e))?;
 
         if let Some(secret) = existing {
             self.secret = secret;
