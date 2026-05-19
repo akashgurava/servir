@@ -1,36 +1,7 @@
-mod db;
-
+use echo_server::{AppState, app_routes, db};
 use std::net::SocketAddr;
 
-use axum::{Router, extract::State, routing::get};
-use serde::Serialize;
-use servir::{ApiResponse, AuthUser, Servir, ServirError};
-use sqlx::SqlitePool;
-use tracing::instrument;
-
-#[derive(Clone)]
-struct AppState {
-    pool: SqlitePool,
-}
-
-#[derive(Serialize)]
-struct UserResponse {
-    id: String,
-    username: String,
-}
-
-/// Returns the authenticated user's app profile, creating it on first access.
-#[instrument(skip_all, fields(user = %claims.username()))]
-async fn user(
-    AuthUser(claims): AuthUser,
-    State(state): State<AppState>,
-) -> Result<ApiResponse<UserResponse>, ServirError> {
-    let profile = db::find_or_create_profile(&state.pool, claims.sub(), claims.username()).await?;
-    Ok(ApiResponse::ok(UserResponse {
-        id: profile.id,
-        username: profile.username,
-    }))
-}
+use servir::Servir;
 
 #[tokio::main]
 async fn main() {
@@ -40,12 +11,11 @@ async fn main() {
     db::migrate(&app_pool).await.expect("app db migrate");
 
     let state = AppState { pool: app_pool };
-    let routes = Router::new().route("/user", get(user)).with_state(state);
 
     Servir::builder()
         .service_name("echo-server")
         .addr(SocketAddr::from(([0, 0, 0, 0], 3000)))
-        .routes(routes)
+        .routes(app_routes(state))
         .serve()
         .await
         .expect("server failed");

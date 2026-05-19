@@ -3,6 +3,10 @@ name = "echo-server"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "echo_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "echo-server"
 path = "src/main.rs"
@@ -19,3 +23,7 @@ sqlx = { version = "0.8", features = [
 ] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"
+
+[dev-dependencies]
+serde_json = "1"
+tower = { version = "0.5", features = ["util"] }
