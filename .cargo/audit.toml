@@ -1,0 +1,5 @@
+[advisories]
+# rsa crate Marvin Attack (RUSTSEC-2023-0071) — no patch available.
+# We use HMAC-SHA256 (HS256) for JWTs, not RSA. This is a transitive dep
+# pulled in by jsonwebtoken; it's not exercised in our code paths.
+ignore = ["RUSTSEC-2023-0071"]
