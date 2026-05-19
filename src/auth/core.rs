@@ -404,7 +404,7 @@ pub(super) async fn consume_refresh_token(
         .bind(now_secs() as i64)
         .execute(pool)
         .await
-        .map_err(|e| DbError::consume_refresh_token(e))?;
+        .map_err(DbError::consume_refresh_token)?;
     Ok(result.rows_affected() > 0)
 }
 

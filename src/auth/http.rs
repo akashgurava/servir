@@ -258,7 +258,7 @@ async fn refresh(
         return Err(AuthTokenError::wrong_kind());
     }
 
-    let valid = consume_refresh_token(&state.pool, &claims.jti()).await?;
+    let valid = consume_refresh_token(&state.pool, claims.jti()).await?;
     if !valid {
         return Err(AuthTokenError::invalid_refresh_token());
     }

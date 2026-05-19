@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-# Check Rust formatting
-if command -v cargo &> /dev/null; then
-    echo "Checking cargo fmt..."
-    cargo fmt --all -- --check
+if ! command -v cargo &> /dev/null; then
+    echo "cargo not found, skipping checks"
+    exit 0
 fi
+
+echo "Checking formatting..."
+cargo fmt --all -- --check
+
+echo "Running clippy..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "All checks passed."
