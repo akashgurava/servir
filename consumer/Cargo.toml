@@ -11,6 +11,11 @@ path = "src/main.rs"
 servir = { path = ".." }
 axum = "0.8"
 serde = { version = "1", features = ["derive"] }
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "macros", "migrate"] }
+sqlx = { version = "0.8", features = [
+    "sqlite",
+    "runtime-tokio",
+    "macros",
+    "migrate",
+] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1"

@@ -1,11 +1,11 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use argon2::password_hash::rand_core::OsRng;
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
-use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tracing::info;
@@ -179,9 +179,8 @@ impl AuthConfig {
         if let Some(secret) = existing {
             self.secret = secret;
         } else {
-            use rand_core::RngCore;
             let mut bytes = [0u8; 32];
-            OsRng.fill_bytes(&mut bytes);
+            getrandom::fill(&mut bytes).expect("getrandom fill");
             let secret = hex::encode(bytes);
 
             sqlx::query("INSERT INTO auth_config (key, value) VALUES ('signing_secret', ?)")
