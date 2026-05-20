@@ -50,7 +50,3 @@ tower = { version = "0.5" }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 tower = { version = "0.5", features = ["util"] }
-
-[[example]]
-name = "echo_server"
-required-features = ["telemetry"]
