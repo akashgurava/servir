@@ -67,6 +67,7 @@ impl<T: Serialize> From<Result<T, ServirError>> for ApiResponse<T> {
 }
 
 /// Error payload carried inside [`ApiResponse::Error`].
+// TODO: Can we make this private?
 #[derive(Debug, Serialize)]
 pub struct ErrorBody {
     /// Sets the HTTP status line; excluded from the JSON body.

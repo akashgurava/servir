@@ -36,7 +36,7 @@ impl Identifier {
     }
 }
 
-/// Structured error context serialized in API error responses.
+/// Structured error context to serialize into API error responses.
 ///
 /// Contains an optional error description and an optional identifier.
 /// Serializes as a flat JSON map:
@@ -112,7 +112,7 @@ impl serde::Serialize for ErrorContext {
 /// Internal trait for converting error types into HTTP response components.
 ///
 /// Each error type provides:
-/// - A status code (e.g. 401, 404, 500)
+/// - A [`StatusCode`] (e.g. [`StatusCode::INTERNAL_SERVER_ERROR`])
 /// - A machine-readable error ID (e.g. `"INVALID_CREDENTIALS"`)
 /// - Structured context for the response body
 pub(crate) trait ErrorInfo {
@@ -152,7 +152,6 @@ macro_rules! impl_err_from_info {
 
 /// Database-level failure.
 ///
-/// All variants map to [`StatusCode::INTERNAL_SERVER_ERROR`].
 /// Each variant wraps the underlying database error message for debugging.
 #[derive(Debug)]
 pub enum DbError {
@@ -593,7 +592,7 @@ impl ErrorInfo for AuthTokenError {
 
 impl_err_from_info!(AuthTokenError);
 
-// --- From impls for ergonomic `?` propagation ---
+// ---------------------------------From impls----------------------------------
 
 impl From<DbError> for ServirError {
     fn from(e: DbError) -> Self {

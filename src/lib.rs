@@ -1,9 +1,14 @@
+#![allow(async_fn_in_trait)]
+
 mod error;
 mod response;
 mod server;
 
 #[cfg(feature = "auth")]
 mod auth;
+
+#[cfg(feature = "auth")]
+pub mod db;
 
 pub use error::{AuthTokenError, AuthUserError, DbError, ServirError};
 pub use response::ApiResponse;

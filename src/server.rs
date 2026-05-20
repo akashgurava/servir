@@ -11,9 +11,7 @@ use tracing::{Level, info, instrument};
 use crate::error::ServirError;
 use crate::response::ApiResponse;
 
-// ---------------------------------------------------------------------------
-// Telemetry
-// ---------------------------------------------------------------------------
+// ---------------------------------Telemetry----------------------------------
 
 /// Initialises the global `tracing` subscriber (stdout-only, human-readable).
 ///
@@ -116,9 +114,7 @@ pub fn init_logging(
     guard
 }
 
-// ---------------------------------------------------------------------------
-// Middleware
-// ---------------------------------------------------------------------------
+// ---------------------------------Middleware----------------------------------
 
 /// Applies the standard middleware stack to a router.
 ///
@@ -141,9 +137,7 @@ fn standard_middleware(router: Router) -> Router {
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
 }
 
-// ---------------------------------------------------------------------------
-// Extract
-// ---------------------------------------------------------------------------
+// ---------------------------------Extract----------------------------------
 
 /// Drop-in replacement for [`axum::Json`] that maps parse failures
 /// into [`ServirError::BadRequest`], ensuring the error envelope is preserved.
@@ -176,9 +170,7 @@ where
     }
 }
 
-// ---------------------------------------------------------------------------
-// Server
-// ---------------------------------------------------------------------------
+// ---------------------------------Server----------------------------------
 
 /// Binds a TCP listener and serves `router` until the server terminates.
 ///
@@ -192,9 +184,7 @@ async fn serve(addr: SocketAddr, router: Router) -> Result<(), std::io::Error> {
     axum::serve(listener, router).await
 }
 
-// ---------------------------------------------------------------------------
-// Builder
-// ---------------------------------------------------------------------------
+// ---------------------------------Builder----------------------------------
 
 /// Entry point for building a servir-managed HTTP server.
 ///
@@ -326,35 +316,32 @@ impl ServerBuilder {
 
         #[cfg(feature = "auth")]
         {
-            use sqlx::sqlite::SqliteConnectOptions;
-            use std::str::FromStr;
+            use crate::{
+                auth::{AuthConfig, AuthLayer, mount_auth_routes},
+                db::{AuthRepository, Db},
+            };
 
             let database_url = self
                 .auth_database_url
                 .expect("auth_database_url must be set before calling build()");
 
-            let opts = SqliteConnectOptions::from_str(&database_url)
-                .map_err(|e| crate::error::DbError::connection(&database_url, e))?
-                .create_if_missing(true);
-            let auth_pool = sqlx::SqlitePool::connect_with(opts)
-                .await
-                .map_err(|e| crate::error::DbError::connection(&database_url, e))?;
+            let db = Db::connect(&database_url).await?;
+            db.migrate_auth().await?;
 
-            let mut auth_config = crate::auth::AuthConfig::with_defaults();
+            let mut auth_config = AuthConfig::with_defaults();
             if let Some(ttl) = self.access_token_ttl_secs {
                 auth_config.set_access_token_ttl(ttl);
             }
             if let Some(ttl) = self.refresh_token_ttl_secs {
                 auth_config.set_refresh_token_ttl(ttl);
             }
-            auth_config.migrate(&auth_pool).await?;
-            auth_config.load_or_generate_secret(&auth_pool).await?;
-            api = api.merge(crate::auth::mount_auth_routes(
-                auth_pool,
-                auth_config.clone(),
-            ));
+
+            let secret = AuthRepository::load_or_generate_secret(&db).await?;
+            auth_config.set_secret(secret);
+
+            api = api.merge(mount_auth_routes(db, auth_config.clone()));
             api = api.route("/health", get(health));
-            api = api.layer(crate::auth::AuthLayer::new(auth_config));
+            api = api.layer(AuthLayer::new(auth_config));
         }
 
         #[cfg(not(feature = "auth"))]

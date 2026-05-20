@@ -3,12 +3,13 @@ pub mod db;
 use axum::{Router, extract::State, routing::get};
 use serde::Serialize;
 use servir::{ApiResponse, AuthUser, ServirError};
-use sqlx::SqlitePool;
 use tracing::instrument;
+
+use db::Db;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub pool: SqlitePool,
+    pub db: Db,
 }
 
 #[derive(Serialize)]
@@ -23,7 +24,10 @@ async fn user(
     AuthUser(claims): AuthUser,
     State(state): State<AppState>,
 ) -> Result<ApiResponse<UserResponse>, ServirError> {
-    let profile = db::find_or_create_profile(&state.pool, claims.sub(), claims.username()).await?;
+    let profile = state
+        .db
+        .find_or_create_profile(claims.sub(), claims.username())
+        .await?;
     Ok(ApiResponse::ok(UserResponse {
         id: profile.id,
         username: profile.username,

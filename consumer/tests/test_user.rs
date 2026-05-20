@@ -2,20 +2,18 @@ use std::net::SocketAddr;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use echo_server::{AppState, app_routes, db};
+use echo_server::{AppState, app_routes, db::Db};
 use serde_json::{Value, json};
 use servir::Servir;
 use tower::ServiceExt;
 
-// ---------------------------------------------------------------------------
-// Test app
-// ---------------------------------------------------------------------------
+// ---------------------------------Test app----------------------------------
 
 async fn build_test_app() -> Servir {
-    let app_pool = db::connect("sqlite::memory:").await.unwrap();
-    db::migrate(&app_pool).await.unwrap();
+    let db = Db::connect("sqlite::memory:").await.unwrap();
+    db.migrate().await.unwrap();
 
-    let state = AppState { pool: app_pool };
+    let state = AppState { db };
 
     Servir::builder()
         .service_name("test-consumer")
@@ -27,9 +25,7 @@ async fn build_test_app() -> Servir {
         .unwrap()
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ---------------------------------Helpers----------------------------------
 
 async fn call(app: &Servir, req: Request<Body>) -> (StatusCode, Value) {
     let response = app.router().clone().oneshot(req).await.unwrap();
@@ -73,9 +69,7 @@ async fn register(app: &Servir) -> (String, String) {
     (access, refresh)
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+// ---------------------------------Tests----------------------------------
 
 #[tokio::test]
 async fn user_endpoint_requires_auth() {

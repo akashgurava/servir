@@ -8,21 +8,18 @@ use axum::http::request::Parts;
 use axum::http::{Request, Response};
 use axum::routing::{get, post};
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
 use tower::{Layer, Service};
 use tracing::{instrument, warn};
 
 use super::core::{
-    AuthConfig, Claims, TokenKind, consume_refresh_token, create_user,
-    delete_refresh_tokens_for_user, find_user_by_id, find_user_by_username, hash_password,
-    issue_access_token, issue_refresh_token, store_refresh_token, verify_password, verify_token,
+    AuthConfig, Claims, TokenKind, hash_password, issue_access_token, issue_refresh_token,
+    verify_password, verify_token,
 };
+use crate::db::{AuthRepository, Db};
 use crate::error::{AuthTokenError, AuthUserError, ServirError};
 use crate::{ApiResponse, AppJson};
 
-// ---------------------------------------------------------------------------
-// Layer
-// ---------------------------------------------------------------------------
+// ---------------------------------Layer----------------------------------
 
 /// Tower layer that injects [`AuthConfig`] into request extensions.
 ///
@@ -54,7 +51,7 @@ impl<S> Layer<S> for AuthLayer {
 
 /// The service created by [`AuthLayer`]. Injects config into request extensions.
 #[derive(Clone)]
-pub struct AuthService<S> {
+pub(crate) struct AuthService<S> {
     inner: S,
     config: Arc<AuthConfig>,
 }
@@ -77,9 +74,7 @@ where
     }
 }
 
-// ---------------------------------------------------------------------------
-// Extractor
-// ---------------------------------------------------------------------------
+// ---------------------------------Extractor----------------------------------
 
 /// Axum extractor that validates the `Authorization: Bearer <token>` header
 /// and injects the access token [`Claims`] into the handler.
@@ -125,13 +120,11 @@ where
     }
 }
 
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
+// ---------------------------------Routes----------------------------------
 
 #[derive(Clone)]
 struct AuthRouteState {
-    pool: SqlitePool,
+    db: Db,
     config: Arc<AuthConfig>,
 }
 
@@ -178,9 +171,9 @@ struct MeResponse {
 /// - `POST /auth/refresh` — rotate refresh token
 /// - `POST /auth/logout` — revoke all refresh tokens
 /// - `GET  /auth/me` — return current user info from access token claims
-pub(crate) fn mount_auth_routes(pool: SqlitePool, config: AuthConfig) -> Router {
+pub(crate) fn mount_auth_routes(db: Db, config: AuthConfig) -> Router {
     let state = AuthRouteState {
-        pool,
+        db,
         config: Arc::new(config),
     };
     Router::new()
@@ -205,7 +198,9 @@ async fn register(
     }
 
     let hash = hash_password(&body.password)?;
-    let user = create_user(&state.pool, &body.username, &hash)
+    let user = state
+        .db
+        .create_user(&body.username, &hash)
         .await
         .inspect_err(|_| {
             warn!(username = %body.username, "register: username taken");
@@ -213,13 +208,15 @@ async fn register(
 
     let access_token = issue_access_token(user.id(), user.username(), &state.config)?;
     let (refresh_token, jti) = issue_refresh_token(user.id(), user.username(), &state.config)?;
-    store_refresh_token(
-        &state.pool,
-        &jti,
-        &user,
-        state.config.refresh_token_ttl_secs,
-    )
-    .await?;
+    state
+        .db
+        .store_refresh_token(
+            &jti,
+            user.id(),
+            user.username(),
+            state.config.refresh_token_ttl_secs(),
+        )
+        .await?;
 
     Ok(ApiResponse::ok(TokenResponse {
         access_token,
@@ -233,7 +230,9 @@ async fn login(
     State(state): State<AuthRouteState>,
     AppJson(body): AppJson<LoginRequest>,
 ) -> Result<ApiResponse<TokenResponse>, ServirError> {
-    let user = find_user_by_username(&state.pool, &body.username)
+    let user = state
+        .db
+        .find_user_by_username(&body.username)
         .await?
         .ok_or_else(|| {
             warn!(username = %body.username, "login: user not found");
@@ -247,13 +246,15 @@ async fn login(
 
     let access_token = issue_access_token(user.id(), user.username(), &state.config)?;
     let (refresh_token, jti) = issue_refresh_token(user.id(), user.username(), &state.config)?;
-    store_refresh_token(
-        &state.pool,
-        &jti,
-        &user,
-        state.config.refresh_token_ttl_secs,
-    )
-    .await?;
+    state
+        .db
+        .store_refresh_token(
+            &jti,
+            user.id(),
+            user.username(),
+            state.config.refresh_token_ttl_secs(),
+        )
+        .await?;
 
     Ok(ApiResponse::ok(TokenResponse {
         access_token,
@@ -273,25 +274,29 @@ async fn refresh(
         return Err(AuthTokenError::wrong_kind());
     }
 
-    let valid = consume_refresh_token(&state.pool, claims.jti()).await?;
+    let valid = state.db.consume_refresh_token(claims.jti()).await?;
     if !valid {
         warn!(username = %claims.username(), "refresh: token replay detected");
         return Err(AuthTokenError::invalid_refresh_token());
     }
 
-    let user = find_user_by_id(&state.pool, claims.sub())
+    let user = state
+        .db
+        .find_user_by_id(claims.sub())
         .await?
         .ok_or_else(|| AuthTokenError::user_not_found(claims.sub()))?;
 
     let access_token = issue_access_token(user.id(), user.username(), &state.config)?;
     let (refresh_token, jti) = issue_refresh_token(user.id(), user.username(), &state.config)?;
-    store_refresh_token(
-        &state.pool,
-        &jti,
-        &user,
-        state.config.refresh_token_ttl_secs,
-    )
-    .await?;
+    state
+        .db
+        .store_refresh_token(
+            &jti,
+            user.id(),
+            user.username(),
+            state.config.refresh_token_ttl_secs(),
+        )
+        .await?;
 
     Ok(ApiResponse::ok(TokenResponse {
         access_token,
@@ -312,7 +317,10 @@ async fn logout(
         return Err(AuthTokenError::wrong_kind());
     }
 
-    delete_refresh_tokens_for_user(&state.pool, claims.sub()).await?;
+    state
+        .db
+        .delete_refresh_tokens_for_user(claims.sub())
+        .await?;
     Ok(ApiResponse::ok(()))
 }
 
@@ -325,9 +333,7 @@ async fn me(AuthUser(claims): AuthUser) -> ApiResponse<MeResponse> {
     })
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+// ---------------------------------Tests----------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -355,7 +361,8 @@ mod tests {
             .await
             .expect("in-memory pool");
 
-        config.migrate(&pool).await.expect("auth migrations");
+        let db = Db::from_pool(pool);
+        db.migrate_auth().await.expect("auth migrations");
 
         async fn protected(AuthUser(claims): AuthUser) -> ApiResponse<String> {
             ApiResponse::ok(claims.username().to_string())
@@ -363,7 +370,7 @@ mod tests {
 
         Router::new()
             .route("/protected", get(protected))
-            .merge(mount_auth_routes(pool, config.clone()))
+            .merge(mount_auth_routes(db, config.clone()))
             .layer(AuthLayer::new(config))
     }
 

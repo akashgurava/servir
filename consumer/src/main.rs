@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use clap::Parser;
-use echo_server::{AppState, app_routes, db};
+use echo_server::{AppState, app_routes, db::Db};
 use servir::Servir;
 
 #[derive(Parser)]
@@ -30,10 +30,10 @@ async fn main() {
     let auth_db_url = format!("sqlite://{}", args.auth_db);
     let data_db_url = format!("sqlite://{}", args.data_db);
 
-    let app_pool = db::connect(&data_db_url).await.expect("app db connect");
-    db::migrate(&app_pool).await.expect("app db migrate");
+    let db = Db::connect(&data_db_url).await.expect("app db connect");
+    db.migrate().await.expect("app db migrate");
 
-    let state = AppState { pool: app_pool };
+    let state = AppState { db };
 
     Servir::builder()
         .service_name("echo-server")
