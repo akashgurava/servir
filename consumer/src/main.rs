@@ -14,11 +14,18 @@ struct Args {
     /// Path to the app data SQLite database.
     #[arg(long, env = "CONSUMER_DATA_DB", default_value = "./data/db/data.db")]
     data_db: String,
+
+    /// Directory for rotating log files.
+    #[arg(long, env = "CONSUMER_LOG_DIR", default_value = "./data/logs")]
+    log_dir: String,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    let _guard = servir::init_logging(&args.log_dir, "echo-server");
+
+    tracing::info!(auth_db = %args.auth_db, data_db = %args.data_db, "starting echo-server");
 
     let auth_db_url = format!("sqlite://{}", args.auth_db);
     let data_db_url = format!("sqlite://{}", args.data_db);

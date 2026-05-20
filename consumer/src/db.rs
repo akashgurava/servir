@@ -82,6 +82,8 @@ pub async fn find_or_create_profile(
         .await
         .map_err(|e| DbError::unknown("insert_user_profile", e))?;
 
+    info!(user_id, username, "created user profile");
+
     Ok(UserProfile {
         id: user_id.to_string(),
         username: username.to_string(),

@@ -32,7 +32,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 
 # Build the binary. Only this layer reruns on source-only changes.
 COPY . .
-RUN cargo build --release -p echo-server && mkdir -p /data/db
+RUN cargo build --release -p echo-server && mkdir -p /data/db /data/logs
 
 # ── Stage 3: runtime ──────────────────────────────────────────────────────────
 # distroless/cc contains glibc + libgcc — sufficient for standard Rust binaries.

@@ -50,7 +50,7 @@ echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo "▶ Starting container..."
-mkdir -p "$TEST_DIR/data/db"
+mkdir -p "$TEST_DIR/data/db" "$TEST_DIR/data/logs"
 docker run -d \
   --name "$CONTAINER" \
   -p 3333:3000 \
@@ -58,6 +58,7 @@ docker run -d \
   "$IMAGE" \
   --auth-db /data/db/auth.db \
   --data-db /data/db/data.db \
+  --log-dir /data/logs \
   > /dev/null
 sleep 2
 echo "  Container running: $CONTAINER"
@@ -67,6 +68,13 @@ echo ""
 echo "▶ Verifying database files..."
 check "auth.db exists" "true" "$([ -f $TEST_DIR/data/db/auth.db ] && echo true || echo false)"
 check "data.db exists" "true" "$([ -f $TEST_DIR/data/db/data.db ] && echo true || echo false)"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────────────────
+echo "▶ Verifying log files..."
+LOG_FILE=$(ls "$TEST_DIR/data/logs"/echo-server.log.* 2>/dev/null | head -1)
+check "log file created" "true" "$([ -n "$LOG_FILE" ] && echo true || echo false)"
+check "log file has JSON content" "true" "$([ -n "$LOG_FILE" ] && head -1 "$LOG_FILE" | python3 -c 'import sys,json; json.load(sys.stdin); print("true")' 2>/dev/null || echo false)"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ pub use response::ApiResponse;
 pub use server::{AppJson, ServerBuilder, Servir};
 
 #[cfg(feature = "telemetry")]
-pub use server::init_tracing;
+pub use server::{init_logging, init_tracing};
 
 #[cfg(feature = "auth")]
 pub use auth::{AuthUser, Claims};

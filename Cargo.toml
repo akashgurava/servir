@@ -10,7 +10,7 @@ edition = "2024"
 
 [features]
 default = ["telemetry", "auth"]
-telemetry = ["dep:tracing-subscriber"]
+telemetry = ["dep:tracing-subscriber", "dep:tracing-appender"]
 auth = [
     "dep:sqlx",
     "dep:argon2",
@@ -30,7 +30,9 @@ tokio = { version = "1", features = ["net", "rt"] }
 tracing-subscriber = { version = "0.3", features = [
     "env-filter",
     "fmt",
+    "json",
 ], optional = true }
+tracing-appender = { version = "0.2", optional = true }
 sqlx = { version = "0.8", features = [
     "sqlite",
     "runtime-tokio",

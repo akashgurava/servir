@@ -695,8 +695,12 @@ impl_err_from_info!(ServirError);
 
 impl IntoResponse for ServirError {
     fn into_response(self) -> Response {
+        let status = self.status_code();
+        if status.is_server_error() {
+            tracing::error!(error_id = self.error_id(), error = %self, "server error");
+        }
         ApiResponse::<()>::Error {
-            error: ErrorBody::new(self.status_code(), self.error_id(), self.context()),
+            error: ErrorBody::new(status, self.error_id(), self.context()),
         }
         .into_response()
     }

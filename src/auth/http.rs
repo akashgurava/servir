@@ -10,7 +10,7 @@ use axum::routing::{get, post};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use tower::{Layer, Service};
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use super::core::{
     AuthConfig, Claims, TokenKind, consume_refresh_token, create_user,
@@ -96,21 +96,28 @@ where
     type Rejection = ServirError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let config = parts
-            .extensions
-            .get::<Arc<AuthConfig>>()
-            .ok_or_else(AuthTokenError::missing_layer)?;
+        let config = parts.extensions.get::<Arc<AuthConfig>>().ok_or_else(|| {
+            tracing::error!("AuthLayer not installed — misconfiguration");
+            AuthTokenError::missing_layer()
+        })?;
 
         let token = parts
             .headers
             .get(AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.strip_prefix("Bearer "))
-            .ok_or_else(AuthTokenError::missing_header)?;
+            .ok_or_else(|| {
+                warn!("missing authorization header");
+                AuthTokenError::missing_header()
+            })?;
 
-        let claims = verify_token(token, config)?;
+        let claims = verify_token(token, config).map_err(|e| {
+            warn!(error = %e, "token validation failed");
+            e
+        })?;
 
         if *claims.kind() != TokenKind::Access {
+            warn!("non-access token used on protected route");
             return Err(AuthTokenError::wrong_kind());
         }
 
@@ -185,7 +192,7 @@ pub(crate) fn mount_auth_routes(pool: SqlitePool, config: AuthConfig) -> Router 
         .with_state(state)
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, fields(username = %body.username))]
 async fn register(
     State(state): State<AuthRouteState>,
     AppJson(body): AppJson<RegisterRequest>,
@@ -198,7 +205,11 @@ async fn register(
     }
 
     let hash = hash_password(&body.password)?;
-    let user = create_user(&state.pool, &body.username, &hash).await?;
+    let user = create_user(&state.pool, &body.username, &hash)
+        .await
+        .inspect_err(|_| {
+            warn!(username = %body.username, "register: username taken");
+        })?;
 
     let access_token = issue_access_token(user.id(), user.username(), &state.config)?;
     let (refresh_token, jti) = issue_refresh_token(user.id(), user.username(), &state.config)?;
@@ -217,16 +228,20 @@ async fn register(
     }))
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, fields(username = %body.username))]
 async fn login(
     State(state): State<AuthRouteState>,
     AppJson(body): AppJson<LoginRequest>,
 ) -> Result<ApiResponse<TokenResponse>, ServirError> {
     let user = find_user_by_username(&state.pool, &body.username)
         .await?
-        .ok_or_else(|| AuthUserError::invalid_credentials(&body.username))?;
+        .ok_or_else(|| {
+            warn!(username = %body.username, "login: user not found");
+            AuthUserError::invalid_credentials(&body.username)
+        })?;
 
     if !verify_password(&body.password, user.password_hash())? {
+        warn!(username = %body.username, "login: wrong password");
         return Err(AuthUserError::invalid_credentials(&body.username));
     }
 
@@ -260,6 +275,7 @@ async fn refresh(
 
     let valid = consume_refresh_token(&state.pool, claims.jti()).await?;
     if !valid {
+        warn!(username = %claims.username(), "refresh: token replay detected");
         return Err(AuthTokenError::invalid_refresh_token());
     }
 

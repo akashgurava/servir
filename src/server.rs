@@ -4,7 +4,7 @@ use axum::{Router, routing::get};
 use tokio::net::TcpListener;
 use tower_http::{
     request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
-    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+    trace::{DefaultMakeSpan, DefaultOnFailure, DefaultOnResponse, TraceLayer},
 };
 use tracing::{Level, info, instrument};
 
@@ -15,10 +15,16 @@ use crate::response::ApiResponse;
 // Telemetry
 // ---------------------------------------------------------------------------
 
-/// Initialises the global `tracing` subscriber.
+/// Initialises the global `tracing` subscriber (stdout-only, human-readable).
 ///
 /// Filter precedence: `RUST_LOG` env var → `{service_name}=debug,servir=debug,tower_http=debug`.
 /// Safe to call multiple times — subsequent calls are no-ops.
+///
+/// This is a convenience initializer for development and single-output use cases.
+/// Consumers requiring dual output (stdout + file), JSON formatting, or log rotation
+/// should initialize their own `tracing_subscriber::Registry` before calling
+/// `Servir::builder().build()`. Because this function uses `try_init()`, it becomes
+/// a no-op when a subscriber has already been installed.
 #[cfg(feature = "telemetry")]
 pub fn init_tracing(service_name: &str) {
     use tracing_subscriber::EnvFilter;
@@ -28,6 +34,86 @@ pub fn init_tracing(service_name: &str) {
             format!("{service_name}=debug,servir=debug,tower_http=debug").into()
         }))
         .try_init();
+}
+
+/// Initializes production-grade dual-output logging: human-readable stdout + daily-rotated
+/// JSON file.
+///
+/// - Stdout: colored when connected to a TTY, plain otherwise (Docker-friendly).
+/// - File: `{log_dir}/{service_name}.log.YYYY-MM-DD`, one JSON object per line.
+/// - Installs a panic hook that routes panics through `tracing::error!`.
+///
+/// Returns a [`tracing_appender::non_blocking::WorkerGuard`] that **must** be held for
+/// the lifetime of the process. Dropping it shuts down the background writer.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[tokio::main]
+/// async fn main() {
+///     let _guard = servir::init_logging("./data/logs", "my-app");
+///     // ... server setup
+/// }
+/// ```
+///
+/// Because this calls `Registry::init()`, any subsequent `init_tracing()` inside
+/// `Servir::builder().build()` becomes a no-op.
+#[cfg(feature = "telemetry")]
+pub fn init_logging(
+    log_dir: &str,
+    service_name: &str,
+) -> tracing_appender::non_blocking::WorkerGuard {
+    use std::io::IsTerminal;
+
+    use tracing_appender::rolling;
+    use tracing_subscriber::{
+        EnvFilter, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt,
+    };
+
+    std::fs::create_dir_all(log_dir).expect("failed to create log directory");
+
+    let file_appender = rolling::daily(log_dir, format!("{service_name}.log"));
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| format!("{service_name}=debug,servir=debug,tower_http=debug").into());
+
+    let stdout_layer = fmt::layer()
+        .with_target(true)
+        .with_ansi(std::io::stdout().is_terminal());
+
+    let file_layer = fmt::layer()
+        .json()
+        .with_target(true)
+        .with_current_span(true)
+        .with_span_list(true)
+        .with_writer(non_blocking)
+        .with_ansi(false);
+
+    Registry::default()
+        .with(env_filter)
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+
+    // Forward panics through tracing so they appear in both outputs.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info
+            .payload()
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| info.payload().downcast_ref::<String>().map(|s| s.as_str()))
+            .unwrap_or("unknown panic");
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_default();
+        tracing::error!(%message, %location, "PANIC");
+        default_hook(info);
+    }));
+
+    guard
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +134,8 @@ fn standard_middleware(router: Router) -> Router {
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
                 .on_request(())
-                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                .on_response(DefaultOnResponse::new().level(Level::INFO))
+                .on_failure(DefaultOnFailure::new().level(Level::ERROR)),
         )
         .layer(PropagateRequestIdLayer::x_request_id())
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
@@ -81,7 +168,11 @@ where
         axum::Json::<T>::from_request(req, state)
             .await
             .map(|axum::Json(v)| AppJson(v))
-            .map_err(|e| ServirError::bad_request(e.body_text()))
+            .map_err(|e| {
+                let err = ServirError::bad_request(e.body_text());
+                tracing::warn!(error = %err, "malformed request body");
+                err
+            })
     }
 }
 
@@ -297,6 +388,7 @@ struct HealthResponse {
     status: &'static str,
 }
 
-async fn not_found() -> ApiResponse<()> {
+async fn not_found(method: axum::http::Method, uri: axum::http::Uri) -> ApiResponse<()> {
+    tracing::warn!(%method, %uri, "unmatched route");
     ApiResponse::error(ServirError::NotFound)
 }
